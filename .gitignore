@@ -323,7 +323,3 @@ error.glsl
 # Sunrise added start - не отслеживаем локально сгенерированные настройки шардов тестов
 .integration-filters/
 # Sunrise added end
-
-# Lust added start - локальный тестовый TTS-провайдер Fish Audio, не мержится
-Content.Server/_Lust/TTS/TTSManager.FishAudio.cs
-# Lust added end
