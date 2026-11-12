@@ -41,7 +41,15 @@ public sealed partial class TTSManager
         _sawmill = _logMan.GetSawmill("tts");
         _cfg.OnValueChanged(SunriseCCVars.TTSApiUrl, OnApiUrlChanged, true);
         _cfg.OnValueChanged(SunriseCCVars.TTSApiToken, OnApiTokenChanged, true);
+        InitializeLocalProvider(); // Lust edit - хук для локального тестового провайдера, без него ничего не делает
     }
+
+    // Lust edit start - хуки для локального тестового провайдера TTS (файл в .gitignore).
+    // Без реализации компилятор удаляет вызовы, и используется обычный API.
+    partial void InitializeLocalProvider();
+
+    partial void TryConvertWithLocalProvider(TTSVoicePrototype voicePrototype, string text, ref Task<byte[]?>? result);
+    // Lust edit end
 
     private void OnApiUrlChanged(string value)
     {
@@ -57,6 +65,13 @@ public sealed partial class TTSManager
     {
         WantedCount.Inc();
         _sawmill.Verbose($"Generate new audio for '{text}' speech by '{voicePrototype.Speaker}' speaker");
+
+        // Lust edit start - локальный тестовый провайдер, если он есть
+        Task<byte[]?>? localResult = null;
+        TryConvertWithLocalProvider(voicePrototype, text, ref localResult);
+        if (localResult != null)
+            return await localResult;
+        // Lust edit end
 
         var body = new GenerateVoiceRequest
         {

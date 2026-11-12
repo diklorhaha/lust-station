@@ -1,3 +1,4 @@
+using Content.Shared._Lust.CCVar; // Lust edit
 using Content.Shared._Sunrise.AnnouncementSpeaker.Events;
 using Content.Shared._Sunrise.SunriseCCVars;
 using Content.Shared._Sunrise.TTS;
@@ -38,6 +39,7 @@ public sealed partial class TTSSystem : EntitySystem
 
     private float _volume;
     private float _radioVolume;
+    private float _announcementVolume; // Lust edit - громкость объявлений из динамиков
     private int _fileIdx;
     private bool _isQueueEnabled;
     private bool _ghostRadioEnabled;
@@ -68,6 +70,7 @@ public sealed partial class TTSSystem : EntitySystem
         _cfg.OnValueChanged(SunriseCCVars.TTSClientEnabled, OnTtsClientEnabledChanged, true);
         _cfg.OnValueChanged(SunriseCCVars.TTSClientQueueEnabled, OnTTSQueueOptionChanged, true);
         _cfg.OnValueChanged(SunriseCCVars.TTSRadioGhostEnabled, OnTtsRadioGhostChanged, true);
+        _cfg.OnValueChanged(LustCCVars.AnnouncementVolume, OnAnnouncementVolumeChanged, true); // Lust edit
         SubscribeNetworkEvent<PlayTTSEvent>(OnPlayTTS);
         SubscribeNetworkEvent<StopTTSEvent>(OnStopTTS);
         SubscribeNetworkEvent<PlayMultiSpeakerTTSEvent>(OnPlayMultiSpeakerTTS);
@@ -82,6 +85,7 @@ public sealed partial class TTSSystem : EntitySystem
         _cfg.UnsubValueChanged(SunriseCCVars.TTSClientEnabled, OnTtsClientEnabledChanged);
         _cfg.UnsubValueChanged(SunriseCCVars.TTSClientQueueEnabled, OnTTSQueueOptionChanged);
         _cfg.UnsubValueChanged(SunriseCCVars.TTSRadioGhostEnabled, OnTtsRadioGhostChanged);
+        _cfg.UnsubValueChanged(LustCCVars.AnnouncementVolume, OnAnnouncementVolumeChanged); // Lust edit
 
         ContentRoot.Clear();
         _currentPlaying = null;
@@ -105,6 +109,13 @@ public sealed partial class TTSSystem : EntitySystem
     {
         _radioVolume = volume;
     }
+
+    // Lust edit start - громкость объявлений из динамиков
+    private void OnAnnouncementVolumeChanged(float volume)
+    {
+        _announcementVolume = volume;
+    }
+    // Lust edit end
 
     private void OnTTSQueueOptionChanged(bool option)
     {
@@ -271,8 +282,11 @@ public sealed partial class TTSSystem : EntitySystem
 
     private void OnPlayMultiSpeakerTTS(PlayMultiSpeakerTTSEvent ev)
     {
-        if (_volume == 0)
+        // Lust edit start - объявления дополнительно масштабируются клиентской громкостью объявлений
+        var volume = ev.IsRadio ? _volume : _volume * _announcementVolume;
+        if (volume <= 0f)
             return;
+        // Lust edit end
 
         var audioRes = AddTtsAudioResource(ev.SoundData);
 
@@ -295,7 +309,7 @@ public sealed partial class TTSSystem : EntitySystem
                 continue;
 
             var audioParams = AudioParams.Default
-                .WithVolume(SharedAudioSystem.GainToVolume(_volume * volumeModifier))
+                .WithVolume(SharedAudioSystem.GainToVolume(volume * volumeModifier)) // Lust edit
                 .WithMaxDistance(ev.MaxDistance ?? speaker.MaxDistance);
 
             PlayTTSResourceAtCoordinates(audioRes.Value.Resource, coordinates, audioParams);

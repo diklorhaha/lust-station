@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Content.Server._Sunrise.AnnouncementSpeaker;
+using Content.Shared._Lust.Announcements; // Lust edit
 using Content.Server.Chat.Systems;
 using Content.Server.Power.Components;
 using Content.Shared._Sunrise.CollectiveMind;
@@ -186,38 +187,9 @@ public sealed partial class TTSSystem : EntitySystem
             return;
         }
 
-        // Play announcement sound via PVS for each speaker on server side
-        if (ev.AnnouncementSound != null)
-        {
-            foreach (var speaker in speakers)
-            {
-                if (!TryComp<AnnouncementSpeakerComponent>(speaker, out var speakerComp))
-                    continue;
-
-                // Check if speaker is enabled and has power
-                if (!speakerComp.Enabled)
-                    continue;
-
-                if (speakerComp.RequiresPower)
-                {
-                    if (!TryComp<ApcPowerReceiverComponent>(speaker, out var powerReceiver) || !powerReceiver.Powered)
-                        continue;
-                }
-
-                // Play announcement sound via PVS from this speaker
-                var audioParams = (ev.AnnouncementSoundParams ?? AudioParams.Default).WithMaxDistance(speakerComp.Range);
-
-                if (speakerComp.VolumeModifier <= 0f)
-                    audioParams = audioParams.WithVolume(float.NegativeInfinity);
-
-                else if (speakerComp.VolumeModifier != 1f)
-                    audioParams = audioParams.AddVolume(SharedAudioSystem.GainToVolume(speakerComp.VolumeModifier));
-
-                _audioSystem.PlayPvs(ev.AnnouncementSound, speaker, audioParams);
-            }
-        }
-
-        if (ev.TtsData == null || ev.TtsData.Length <= 0)
+        // Lust edit start - сигнал объявления проигрывается на клиенте, чтобы учитывать настройку громкости объявлений
+        var hasTts = ev.TtsData is { Length: > 0 };
+        if (ev.AnnouncementSound == null && !hasTts)
             return;
 
         var speakerData = new List<(MapCoordinates Coordinates, AnnouncementSpeakerComponent Comp)>();
@@ -235,13 +207,15 @@ public sealed partial class TTSSystem : EntitySystem
             speakerData.Add((_xforms.GetMapCoordinates(speaker), speakerComp));
         }
 
+        if (speakerData.Count == 0)
+            return;
+
+        var soundParams = ev.AnnouncementSoundParams ?? AudioParams.Default;
+
         // Для каждого игрока на станции определяем, какие динамики он слышит
         var playerQuery = EntityQueryEnumerator<ActorComponent, TransformComponent>();
-        while (playerQuery.MoveNext(out var playerUid, out var actor, out var playerXform))
+        while (playerQuery.MoveNext(out _, out var actor, out var playerXform))
         {
-            if (_ignoredRecipients.Contains(actor.PlayerSession))
-                continue;
-
             var playerCoordinates = _xforms.GetMapCoordinates(playerXform);
             var heardSpeakers = speakerData
                 .Where(speaker => speaker.Coordinates.MapId == playerCoordinates.MapId)
@@ -258,12 +232,19 @@ public sealed partial class TTSSystem : EntitySystem
                     speaker.Comp.Range))
                 .ToList();
 
-            if (heardSpeakers.Count > 0)
-            {
-                var evMulti = new PlayMultiSpeakerTTSEvent(heardSpeakers, ev.TtsData, volumeModifier: AnnouncementTtsVolumeModifier);
-                RaiseNetworkEvent(evMulti, actor.PlayerSession);
-            }
+            if (heardSpeakers.Count == 0)
+                continue;
+
+            if (ev.AnnouncementSound != null)
+                RaiseNetworkEvent(new PlayAnnouncementSoundEvent(heardSpeakers, ev.AnnouncementSound, soundParams), actor.PlayerSession);
+
+            if (!hasTts || _ignoredRecipients.Contains(actor.PlayerSession))
+                continue;
+
+            var evMulti = new PlayMultiSpeakerTTSEvent(heardSpeakers, ev.TtsData!, volumeModifier: AnnouncementTtsVolumeModifier);
+            RaiseNetworkEvent(evMulti, actor.PlayerSession);
         }
+        // Lust edit end
     }
 
     private async void OnEntitySpoke(EntityUid uid, TTSComponent component, EntitySpokeEvent args)

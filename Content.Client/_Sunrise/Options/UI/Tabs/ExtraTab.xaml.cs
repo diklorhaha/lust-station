@@ -1,4 +1,5 @@
 using Content.Client.Audio;
+using Content.Shared._Lust.CCVar; // Lust edit
 using Content.Shared._Sunrise.Lobby;
 using Content.Shared._Sunrise.SunriseCCVars;
 using Content.Shared.GameTicking;
@@ -44,6 +45,8 @@ public sealed partial class ExtraTab : Control
             SunriseCCVars.TTSRadioVolume,
             SliderTtsRadio,
             scale: ContentAudioSystem.TtsMultiplier);
+
+        Control.AddOptionPercentSlider(LustCCVars.AnnouncementVolume, SliderAnnouncement); // Lust edit
 
         Control.AddOptionCheckBox(SunriseCCVars.TTSClientEnabled, TtsClientCheckBox);
         Control.AddOptionCheckBox(SunriseCCVars.TTSClientQueueEnabled, TtsClientCheckBoxQueue);
